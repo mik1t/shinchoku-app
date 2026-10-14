@@ -1,0 +1,79 @@
+name: Cloudflareへデプロイ
+
+# main への push、または GitHub の「Actions」タブ →「Run workflow」ボタンで実行
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: ${{ vars.PAGES_PROJECT || 'shinchoku' }}
+      DB_NAME: shinchoku-db
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 設定チェック
+        id: check
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID が未登録のためデプロイをスキップしました（README の手順2）"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != '1'
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+        if: steps.check.outputs.skip != '1'
+
+      - run: npm test
+        if: steps.check.outputs.skip != '1'
+
+      - name: D1 データベースを用意（なければ作成）してテーブルを作る
+        if: steps.check.outputs.skip != '1'
+        run: |
+          find_id() { npx wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s);const d=a.find(x=>x.name===process.argv[1]);process.stdout.write(d?(d.uuid||d.id||""):"")})' "$DB_NAME"; }
+          ID=$(find_id)
+          if [ -z "$ID" ]; then npx wrangler d1 create "$DB_NAME"; ID=$(find_id); fi
+          test -n "$ID"
+          sed -i "s/^database_id = .*/database_id = \"$ID\"/" wrangler.toml
+          npx wrangler d1 migrations apply "$DB_NAME" --remote
+
+      - name: Pages プロジェクトを用意（なければ作成）
+        if: steps.check.outputs.skip != '1'
+        run: npx wrangler pages project create "$PROJECT" --production-branch main 2>/dev/null || true
+
+      - name: シークレット（APIキー・ログイン設定）を登録
+        if: steps.check.outputs.skip != '1'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ACCESS_TEAM_DOMAIN: ${{ secrets.ACCESS_TEAM_DOMAIN }}
+          ACCESS_AUD: ${{ secrets.ACCESS_AUD }}
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+        run: |
+          for name in ANTHROPIC_API_KEY ACCESS_TEAM_DOMAIN ACCESS_AUD ALLOWED_EMAILS ADMIN_EMAILS; do
+            val="${!name}"
+            if [ -n "$val" ]; then
+              printf '%s' "$val" | npx wrangler pages secret put "$name" --project-name "$PROJECT" >/dev/null
+              echo "$name を登録しました"
+            else
+              echo "::warning::$name が未登録です"
+            fi
+          done
+
+      - name: デプロイ
+        if: steps.check.outputs.skip != '1'
+        run: npx wrangler pages deploy --project-name "$PROJECT" --branch main --commit-dirty=true
