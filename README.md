@@ -55,7 +55,7 @@ GitHub のこのリポジトリ → **Settings** → **Secrets and variables** �
 | `CLOUDFLARE_API_TOKEN` | 手順2のトークン |
 | `CLOUDFLARE_ACCOUNT_ID` | 手順2のアカウントID |
 | `ANTHROPIC_API_KEY` | 手順1のキー |
-| `ALLOWED_EMAILS` | 社長のメールアドレス（複数ならカンマ区切り） |
+| `ALLOWED_EMAILS` | 使う人のメールアドレス（複数ならカンマ区切り）。テスト中は `miki.miyayoshi@fbmg.co.jp`、本番で社長のメールを追加 |
 | `ADMIN_EMAILS` | `miki.miyayoshi@fbmg.co.jp` |
 | `ACCESS_TEAM_DOMAIN` | 手順5で確認（例：`xxxx.cloudflareaccess.com`） |
 | `ACCESS_AUD` | 手順5で確認（Application Audience (AUD) Tag） |
@@ -70,7 +70,7 @@ GitHub → **Actions** → 「Cloudflareへデプロイ」→ **Run workflow**�
 2. **Access** → **Applications** → **Add an application** → **Self-hosted**
    - Application domain：`shinchoku.pages.dev` と `*.shinchoku.pages.dev`（プレビューURLも守るため）
    - Identity providers：**One-time PIN**
-3. Policy：Action **Allow**、Include → **Emails** に社長のメールと `miki.miyayoshi@fbmg.co.jp`
+3. Policy：Action **Allow**、Include → **Emails** に `miki.miyayoshi@fbmg.co.jp`（本番で社長のメールを追加）
 4. 保存後、アプリの **Overview** に出る **Application Audience (AUD) Tag** を `ACCESS_AUD` に、**Settings → Custom Pages** などに出るチームドメイン（`xxxx.cloudflareaccess.com`）を `ACCESS_TEAM_DOMAIN` に登録
 5. もう一度手順4（Run workflow）を実行して反映
 
